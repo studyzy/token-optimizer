@@ -20,7 +20,9 @@ Interactive coaching for Claude Code or Codex architecture decisions. Analyzes y
 ```bash
 RUNTIME="${TOKEN_OPTIMIZER_RUNTIME:-}"
 if [ -z "$RUNTIME" ]; then
-  if [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
+  if [ -n "$CODEBUDDY_PLUGIN_ROOT" ] || [ -n "$CODEBUDDY_PLUGIN_DATA" ]; then
+    RUNTIME="codebuddy"
+  elif [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
     RUNTIME="claude"
   elif [ -n "$CODEX_HOME" ] || [ -d "$HOME/.codex" ]; then
     RUNTIME="codex"
@@ -32,6 +34,9 @@ fi
 MEASURE_PY=""
 for f in "$HOME/.codex/skills/token-optimizer/scripts/measure.py" \
          "$HOME/.codex/plugins/cache"/*/token-optimizer/*/skills/token-optimizer/scripts/measure.py \
+         "$HOME/.codebuddy/skills/token-optimizer/scripts/measure.py" \
+         "$HOME/.codebuddy/plugins/cache"/*/token-optimizer/*/skills/token-optimizer/scripts/measure.py \
+         "$HOME/.codebuddy/plugins/marketplaces"/*/skills/token-optimizer/scripts/measure.py \
          "$HOME/.claude/skills/token-optimizer/scripts/measure.py" \
          "$HOME/.claude/plugins/cache"/*/token-optimizer/*/skills/token-optimizer/scripts/measure.py \
          "$PWD/skills/token-optimizer/scripts/measure.py"; do

@@ -41,6 +41,30 @@ rm -rf ~/.claude/_backups/token-optimizer # backups written on hook changes
 rm -f  ~/.claude/.settings.lock           # advisory lock file
 ```
 
+## CodeBuddy Code
+
+CodeBuddy Code's config layout mirrors Claude Code's (`~/.codebuddy` instead of `~/.claude`, `CODEBUDDY.md` instead of `CLAUDE.md`), so the uninstall steps are identical with the path prefix swapped.
+
+**Plugin install** (the recommended path):
+
+```
+/plugin uninstall token-optimizer@alexgreensh-token-optimizer
+```
+
+That removes the plugin and its hooks. To also drop the marketplace:
+
+```
+/plugin marketplace remove alexgreensh-token-optimizer
+```
+
+Then remove the skill tree and tracking data (optional, full wipe):
+
+```bash
+rm -rf ~/.codebuddy/skills/token-optimizer   # the skill tree
+rm -rf ~/.codebuddy/_backups/token-optimizer # backups written on hook changes
+rm -f  ~/.codebuddy/.settings.lock           # advisory lock file
+```
+
 ## Codex
 
 ```bash

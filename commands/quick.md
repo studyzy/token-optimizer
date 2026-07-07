@@ -12,7 +12,9 @@ Fast health check. Show the user where they stand in under 10 lines.
 ```bash
 RUNTIME="${TOKEN_OPTIMIZER_RUNTIME:-}"
 if [ -z "$RUNTIME" ]; then
-  if [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
+  if [ -n "$CODEBUDDY_PLUGIN_ROOT" ] || [ -n "$CODEBUDDY_PLUGIN_DATA" ]; then
+    RUNTIME="codebuddy"
+  elif [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
     RUNTIME="claude"
   elif [ -n "$CODEX_HOME" ] || [ -d "$HOME/.codex" ]; then
     RUNTIME="codex"
@@ -32,6 +34,7 @@ export TOKEN_OPTIMIZER_RUNTIME="$RUNTIME"
 ```
 
 2. Run:
+   - CodeBuddy Code plugin: `bash "${CODEBUDDY_PLUGIN_ROOT:-$CLAUDE_PLUGIN_ROOT}/hooks/python-launcher.sh" $MEASURE_PY quick --json`
    - Claude Code plugin: `bash "$CLAUDE_PLUGIN_ROOT/hooks/python-launcher.sh" $MEASURE_PY quick --json`
    - Codex or standalone: `TOKEN_OPTIMIZER_RUNTIME=codex python3 "$MEASURE_PY" quick --json`
 

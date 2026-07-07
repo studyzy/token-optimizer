@@ -1,4 +1,4 @@
-"""Runtime home detection shared by Claude Code, Codex, Hermes, OpenCode, and Copilot adapters.
+"""Runtime home detection shared by Claude Code, Codex, Hermes, OpenCode, Copilot, and CodeBuddy adapters.
 
 This module keeps runtime integration deliberately simple:
 
@@ -20,6 +20,12 @@ This module keeps runtime integration deliberately simple:
   running under GitHub Copilot. COPILOT_HOME is Copilot's OWN variable — TO
   reads it but never asks users to set it (issue #78); TOKEN_OPTIMIZER_COPILOT_HOME
   is TO's own collision-free override.
+- CodeBuddy activates when CODEBUDDY_PLUGIN_ROOT or CODEBUDDY_PLUGIN_DATA is set.
+  CodeBuddy Code also sets CLAUDE_PLUGIN_ROOT/DATA for backward compatibility,
+  but the CodeBuddy-prefixed variables take priority so ~/.codebuddy is used
+  instead of ~/.claude. CodeBuddy's config layout mirrors Claude Code's
+  (~/.codebuddy/plugins, CODEBUDDY.md, ~/.codebuddy/settings.json, etc.), so
+  the Claude audit engine applies directly.
 - Callers can keep legacy variable names while resolving to the correct home.
 
 The goal is to let Token Optimizer share one Python core while platform
@@ -40,13 +46,21 @@ _RUNTIME_CODEX = "codex"
 _RUNTIME_HERMES = "hermes"
 _RUNTIME_OPENCODE = "opencode"
 _RUNTIME_COPILOT = "copilot"
+_RUNTIME_CODEBUDDY = "codebuddy"
 _VALID_RUNTIMES = frozenset(
-    {_RUNTIME_CLAUDE, _RUNTIME_CODEX, _RUNTIME_HERMES, _RUNTIME_OPENCODE, _RUNTIME_COPILOT}
+    {_RUNTIME_CLAUDE, _RUNTIME_CODEX, _RUNTIME_HERMES, _RUNTIME_OPENCODE, _RUNTIME_COPILOT, _RUNTIME_CODEBUDDY}
 )
 _CLAUDE_PLUGIN_ENVS = ("CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA")
+# CodeBuddy Code plugin env vars. CodeBuddy also sets CLAUDE_PLUGIN_ROOT/DATA for
+# backward compatibility, so we check CODEBUDDY-prefixed vars FIRST to correctly
+# route to ~/.codebuddy instead of ~/.claude.
+_CODEBUDDY_PLUGIN_ENVS = ("CODEBUDDY_PLUGIN_ROOT", "CODEBUDDY_PLUGIN_DATA")
 # Claude Code's official config-dir override. When set, Claude stores
 # projects/, settings.json, etc. under this directory instead of ~/.claude.
 _CLAUDE_CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR"
+# CodeBuddy Code's official config-dir override. When set, CodeBuddy stores
+# projects/, settings.json, etc. under this directory instead of ~/.codebuddy.
+_CODEBUDDY_CONFIG_DIR_ENV = "CODEBUDDY_CONFIG_DIR"
 _CODEX_HOME_ENV = "CODEX_HOME"
 _HERMES_HOME_ENV = "HERMES_HOME"
 # COPILOT_HOME is GitHub Copilot CLI's OWN config variable (GitHub docs: it
@@ -613,16 +627,19 @@ def detect_runtime() -> str:
       2. A definitive OpenCode signal — an opencode ancestor process — implies
          OpenCode, evaluated BEFORE the soft Claude plugin-env heuristic so a
          coexisting Claude Code install on the same host can't shadow it (#57)
-      3. Claude plugin env vars imply Claude Code
-      4. An OPENCODE_* env signal implies OpenCode (medium tier: beats
+      3. CodeBuddy plugin env vars imply CodeBuddy (checked BEFORE Claude env
+         because CodeBuddy also sets CLAUDE_PLUGIN_* for compatibility — the
+         CodeBuddy-prefixed vars take priority so ~/.codebuddy is used)
+      4. Claude plugin env vars imply Claude Code
+      5. An OPENCODE_* env signal implies OpenCode (medium tier: beats
          Codex/Hermes so a leftover CODEX_HOME can't shadow a genuine
          OpenCode session — "Guy's bug", issue #57; still AFTER Claude env)
-      5. CODEX_HOME implies Codex
-      6. HERMES_HOME implies Hermes
-      7. A populated opencode config dir implies OpenCode (weak tertiary
+      6. CODEX_HOME implies Codex
+      7. HERMES_HOME implies Hermes
+      8. A populated opencode config dir implies OpenCode (weak tertiary
          tier; loses to Claude/Codex/Hermes/Copilot env, beats default)
-      8. COPILOT_HOME or a copilot ancestor process implies Copilot
-      9. Default to Claude Code for backward compatibility
+      9. COPILOT_HOME or a copilot ancestor process implies Copilot
+      10. Default to Claude Code for backward compatibility
 
     Why step 2 is ahead of the Claude env check (KTD-3, issue #57): on a host
     with BOTH Claude Code and OpenCode installed, a stray CLAUDE_PLUGIN_* env var
@@ -631,12 +648,18 @@ def detect_runtime() -> str:
     for what's actually running, so it wins. It cannot steal a genuine Claude,
     Codex, or Hermes session: those have no opencode ancestor, so the scan
     returns False and resolution falls through unchanged. The OPENCODE_* env
-    signal (step 4) sits AFTER the Claude env check so an exported OPENCODE_*
+    signal (step 5) sits AFTER the Claude env check so an exported OPENCODE_*
     var alone never overrides a real Claude session, but BEFORE Codex/Hermes
     so a leftover CODEX_HOME/HERMES_HOME can't shadow a genuine OpenCode
-    session. The config-dir signal (step 7) is the weakest tier — it only
+    session. The config-dir signal (step 8) is the weakest tier — it only
     fires when no Claude/Codex/Hermes/Copilot env is set and no real Claude
     Code home (settings.json or projects/) exists.
+
+    Why step 3 is BEFORE step 4: CodeBuddy Code sets both
+    CODEBUDDY_PLUGIN_ROOT and CLAUDE_PLUGIN_ROOT in the same process for
+    backward compatibility. Checking CODEBUDDY_* first ensures the runtime
+    home is ~/.codebuddy instead of ~/.claude, which is the correct target
+    for CodeBuddy's config layout.
     """
     override = os.environ.get(_RUNTIME_OVERRIDE, "").strip().lower()
     if override in _VALID_RUNTIMES:
@@ -644,6 +667,11 @@ def detect_runtime() -> str:
 
     if _opencode_process_signal():
         return _RUNTIME_OPENCODE
+
+    # CodeBuddy sets CLAUDE_PLUGIN_* for compat, but we check CODEBUDDY_* first
+    # so ~/.codebuddy is used instead of ~/.claude.
+    if any(os.environ.get(env_var) for env_var in _CODEBUDDY_PLUGIN_ENVS):
+        return _RUNTIME_CODEBUDDY
 
     if any(os.environ.get(env_var) for env_var in _CLAUDE_PLUGIN_ENVS):
         return _RUNTIME_CLAUDE
@@ -692,6 +720,31 @@ def claude_home() -> Path:
         pass
     print(
         f"[Token Optimizer] Warning: {_CLAUDE_CONFIG_DIR_ENV}={raw!r} rejected "
+        "(not an absolute, existing, non-symlink directory). Using default.",
+        file=sys.stderr,
+    )
+    return fallback
+
+
+def codebuddy_home() -> Path:
+    """Return CodeBuddy Code's home directory.
+
+    Honors CODEBUDDY_CONFIG_DIR — CodeBuddy Code's official override for where it
+    stores projects/, settings.json, etc. Mirrors the claude_home() logic: accepts
+    any absolute, existing, non-symlink directory, falls back to ~/.codebuddy.
+    """
+    fallback = Path.home() / ".codebuddy"
+    raw = os.environ.get(_CODEBUDDY_CONFIG_DIR_ENV, "").strip()
+    if not raw:
+        return fallback
+    candidate = Path(raw).expanduser()
+    try:
+        if candidate.is_absolute() and candidate.is_dir() and not candidate.is_symlink():
+            return candidate.resolve(strict=False)
+    except OSError:
+        pass
+    print(
+        f"[Token Optimizer] Warning: {_CODEBUDDY_CONFIG_DIR_ENV}={raw!r} rejected "
         "(not an absolute, existing, non-symlink directory). Using default.",
         file=sys.stderr,
     )
@@ -803,6 +856,9 @@ def runtime_home() -> Path:
     if runtime == _RUNTIME_COPILOT:
         return copilot_home()
 
+    if runtime == _RUNTIME_CODEBUDDY:
+        return codebuddy_home()
+
     return claude_home()
 
 
@@ -810,6 +866,8 @@ def plugin_data_env_vars() -> tuple[str, ...]:
     """Return plugin-data env vars in runtime-specific priority order."""
     if detect_runtime() in (_RUNTIME_CODEX, _RUNTIME_HERMES, _RUNTIME_OPENCODE, _RUNTIME_COPILOT):
         return ("TOKEN_OPTIMIZER_PLUGIN_DATA",)
+    if detect_runtime() == _RUNTIME_CODEBUDDY:
+        return ("CODEBUDDY_PLUGIN_DATA", "CLAUDE_PLUGIN_DATA", "TOKEN_OPTIMIZER_PLUGIN_DATA")
     return ("CLAUDE_PLUGIN_DATA", "TOKEN_OPTIMIZER_PLUGIN_DATA")
 
 
@@ -824,4 +882,6 @@ def runtime_name_for_humans() -> str:
         return "OpenCode"
     if runtime == _RUNTIME_COPILOT:
         return "GitHub Copilot"
+    if runtime == _RUNTIME_CODEBUDDY:
+        return "CodeBuddy Code"
     return "Claude Code"

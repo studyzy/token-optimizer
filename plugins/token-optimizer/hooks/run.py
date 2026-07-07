@@ -4,13 +4,14 @@
 Invoked from hooks.json via a small bash launcher that locates a usable
 Python 3 interpreter on macOS, Linux, and Windows:
 
-  "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/python-launcher.sh\" \"${CLAUDE_PLUGIN_ROOT}/hooks/run.py\" <script-relative-path> [args...]"
+  "command": "bash \"${CODEBUDDY_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/python-launcher.sh\" \"${CODEBUDDY_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT}}/hooks/run.py\" <script-relative-path> [args...]"
 
 The launcher handles Windows-specific gotchas (Program Files spaced paths,
 Microsoft Store zero-byte stubs in WindowsApps, py launcher fallback) so
 this file can assume it's running under a real Python 3.9+.
 
-This dispatcher resolves the target script under CLAUDE_PLUGIN_ROOT,
+This dispatcher resolves the target script under CODEBUDDY_PLUGIN_ROOT
+(or CLAUDE_PLUGIN_ROOT for backward compatibility),
 checks it exists, and runs it with the same interpreter (sys.executable).
 On timeout we kill the child (Popen.kill) to avoid leaking a process
 holding the trends.db SQLite lock. Always exits 0 so hook failures never
@@ -37,7 +38,7 @@ def _check_consent() -> bool:
         home = Path.home()
 
         # Resolve config path from env (set by Claude Code before hook invocation)
-        plugin_data = os.environ.get("CLAUDE_PLUGIN_DATA", "")
+        plugin_data = os.environ.get("CODEBUDDY_PLUGIN_DATA", "") or os.environ.get("CLAUDE_PLUGIN_DATA", "")
         if plugin_data:
             pd = Path(plugin_data).resolve()
             if not str(pd).startswith(str(home)):
@@ -116,7 +117,7 @@ def main() -> int:
     if rel_path.is_absolute() or ".." in rel_path.parts:
         return 0
 
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    plugin_root = os.environ.get("CODEBUDDY_PLUGIN_ROOT", "") or os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
     if plugin_root:
         root_path = Path(plugin_root)
     else:

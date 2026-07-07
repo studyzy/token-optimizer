@@ -3,9 +3,14 @@
 </p>
 
 <p align="center">
+  <strong>English</strong> | <a href="README.zh-CN.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/alexgreensh/token-optimizer/releases/latest"><img src="https://img.shields.io/github/v/release/alexgreensh/token-optimizer?label=version&color=green" alt="Latest stable version"></a>
   <a href="https://github.com/alexgreensh/token-optimizer/releases"><img src="https://img.shields.io/github/release-date/alexgreensh/token-optimizer?label=last%20release&color=blue" alt="Last Release"></a>
   <a href="https://github.com/alexgreensh/token-optimizer"><img src="https://img.shields.io/badge/Claude_Code-Plugin-blueviolet" alt="Claude Code Plugin"></a>
+  <a href="https://github.com/alexgreensh/token-optimizer"><img src="https://img.shields.io/badge/CodeBuddy_Code-Plugin-blue" alt="CodeBuddy Code Plugin"></a>
   <a href="https://github.com/alexgreensh/token-optimizer/tree/main/openclaw"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Falexgreensh%2Ftoken-optimizer%2Fmain%2Fopenclaw%2Fpackage.json&query=%24.version&prefix=v&label=OpenClaw&color=brightgreen" alt="OpenClaw version"></a>
   <a href="https://github.com/alexgreensh/token-optimizer/tree/main/opencode"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Falexgreensh%2Ftoken-optimizer%2Fmain%2Fopencode%2Fpackage.json&query=%24.version&prefix=v&label=OpenCode&color=58a6ff" alt="OpenCode version"></a>
   <a href="https://github.com/alexgreensh/token-optimizer/blob/main/docs/codex.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Falexgreensh%2Ftoken-optimizer%2Fmain%2F.codex-plugin%2Fplugin.json&query=%24.version&prefix=v&label=Codex&color=orange" alt="Codex version"></a>
@@ -47,7 +52,7 @@ Token Optimizer cuts the tokens your AI coding assistant wastes, keeps your work
 
 **Why not just use Headroom or RTK?** They compress command output, which covers 15-25% of your context. Token Optimizer covers that plus the other 75%: bloated configs, unused skills, stale memory, compaction loss, model misrouting, behavioral waste. Every saving is cache-safe and measured. The dashboard updates after every session, automatically.
 
-Works on **Claude Code** (CLI and VS Code), **OpenCode**, **OpenClaw**, **Codex**, **Hermes**, and **GitHub Copilot** (beta). Windsurf and Cursor are next on the roadmap.
+Works on **Claude Code** (CLI and VS Code), **CodeBuddy Code**, **OpenCode**, **OpenClaw**, **Codex**, **Hermes**, and **GitHub Copilot** (beta). Windsurf and Cursor are next on the roadmap.
 
 <p align="center">
   <img src="skills/token-optimizer/assets/hero-terminal.svg" alt="Token Optimizer Quick Scan" width="800">
@@ -67,6 +72,17 @@ Then in Claude Code: `/token-optimizer`
 > **Enable auto-update after installing.** Claude Code ships third-party marketplaces with auto-update off by default. `/plugin` → **Marketplaces** tab → select `alexgreensh-token-optimizer` → **Enable auto-update**. One-time, 10 seconds.
 >
 > After install, run `/token-optimizer` once to set up hooks. From there, everything runs automatically: compression, checkpoints, quality scoring, dashboard updates. You don't need to run any command again unless you want an audit.
+
+**CodeBuddy Code:**
+
+```
+/plugin marketplace add alexgreensh/token-optimizer
+/plugin install token-optimizer@alexgreensh-token-optimizer
+```
+
+Then in CodeBuddy Code: `/token-optimizer`
+
+> After install, run `/token-optimizer` once to set up hooks. CodeBuddy Code's config layout mirrors Claude Code's (`~/.codebuddy` instead of `~/.claude`, `CODEBUDDY.md` instead of `CLAUDE.md`), so the audit engine applies directly.
 
 <details>
 <summary><b>Other platforms and install methods</b></summary>
@@ -213,7 +229,7 @@ RTK reaches the first surface. Headroom reaches the first and the third. Token O
 | **Zero baseline context overhead** | 🟢 External process, no context injection | 🔴 Injects instructions | 🟢 Shell-level only | 🔴 MCP server overhead | 🟢 Native |
 | **Zero runtime dependencies** | 🟢 Pure stdlib (Python/TypeScript) | 🟡 Python + Rust + optional model | 🟢 Single Rust binary | 🟡 SQLite adapter required | 🟢 N/A |
 | **Zero telemetry** | 🟢 | 🟢 | 🟡 Opt-in | 🟡 Varies | 🟢 |
-| **Multi-platform** | 🟢 Claude Code, VS Code, Codex, OpenClaw, OpenCode, Hermes, Copilot | 🟢 Claude Code, Cursor, Codex, Aider, Copilot | 🟢 14 integrations | 🟢 15 integrations | 🔴 Claude Code only |
+| **Multi-platform** | 🟢 Claude Code, CodeBuddy Code, VS Code, Codex, OpenClaw, OpenCode, Hermes, Copilot | 🟢 Claude Code, Cursor, Codex, Aider, Copilot | 🟢 14 integrations | 🟢 15 integrations | 🔴 Claude Code only |
 
 Every claim is tested against real sessions and a 57-fixture compression suite you can run yourself. **[Full benchmark methodology and results →](BENCHMARK.md)**
 

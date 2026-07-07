@@ -21,6 +21,8 @@ default agents to haiku, batch requests.
 
 ## Backup
 
+> **On CodeBuddy Code**, replace `~/.claude` with `~/.codebuddy` and `CLAUDE.md` with `CODEBUDDY.md` throughout this section. CodeBuddy Code's config layout mirrors Claude Code's, so the backup steps are identical with the path prefix swapped.
+
 ```bash
 BACKUP_DIR="$HOME/.claude/_backups/token-optimizer-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"

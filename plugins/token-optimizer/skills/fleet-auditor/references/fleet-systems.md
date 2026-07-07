@@ -34,6 +34,39 @@ Reference file for Fleet Auditor. Loaded on demand for adapter development.
 
 ---
 
+## CodeBuddy Code
+
+**Data Location**: `~/.codebuddy/projects/`
+**Format**: JSONL (one JSON object per line)
+**Structure**: Identical to Claude Code. Each project gets a directory named with a path-encoded slug (e.g., `-Users-alex-myproject/`). Session files are `{uuid}.jsonl`. Subagent files live in `{uuid}/subagents/{sub-uuid}.jsonl`.
+
+CodeBuddy Code's config layout mirrors Claude Code's exactly (`~/.codebuddy` instead of `~/.claude`, `CODEBUDDY.md` instead of `CLAUDE.md`, `~/.codebuddy/settings.json`, `~/.codebuddy/plugins/`). The JSONL transcript schema is the same as Claude Code's, so the Claude Code adapter applies directly — only the base directory changes.
+
+### JSONL Record Types
+- `type: "user"` - User messages with `message.content` (string or array of blocks)
+- `type: "assistant"` - Assistant messages with `message.content` (array of tool_use and text blocks), `message.usage` (token data), `message.model`
+- `type: "result"` - Tool results
+
+### Token Fields (in `message.usage`)
+```json
+{
+  "input_tokens": 12345,
+  "output_tokens": 678,
+  "cache_read_input_tokens": 9000,
+  "cache_creation_input_tokens": 3000
+}
+```
+
+### Key Extraction Points
+Same as Claude Code:
+- **Version**: First record with `version` field
+- **Slug**: First record with `slug` field
+- **Timestamp**: `timestamp` field (ISO-8601 with Z suffix)
+- **Model**: `message.model` in assistant records
+- **Tools**: `tool_use` blocks in `message.content` array
+
+---
+
 ## OpenClaw
 
 **Data Location**: `~/.openclaw/agents/` (also `~/.clawdbot/`, `~/.moltbot/`)

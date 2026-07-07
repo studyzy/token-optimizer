@@ -1,12 +1,12 @@
 ---
 name: token-optimizer
-description: Find the ghost tokens. Audit Claude Code or Codex setup, see where context goes, fix it. Use when context feels tight.
+description: Find the ghost tokens. Audit Claude Code, CodeBuddy Code, or Codex setup, see where context goes, fix it. Use when context feels tight.
 effort: high
 ---
 
 # Token Optimizer
 
-Audits a Claude Code or Codex setup, identifies context window waste, implements fixes, and measures savings.
+Audits a Claude Code, CodeBuddy Code, or Codex setup, identifies context window waste, implements fixes, and measures savings.
 
 **Target**: 5-15% context recovery through config cleanup, up to 25%+ with autocompact management.
 
@@ -14,23 +14,27 @@ Audits a Claude Code or Codex setup, identifies context window waste, implements
 
 ## Step 0: Resolve measure.py, then gate on runtime (run this first)
 
-> **Runtime pre-gate (environment only — touches no `~/.claude` path).** Before resolving any script
+> **Runtime pre-gate (environment only — touches no `~/.claude` or `~/.codebuddy` path).** Before resolving any script
 > path, check the environment directly. This keeps non-Claude runtimes from ever resolving a
 > `~/.claude` path (issue #57):
 > ```bash
 > # OpenCode / Copilot set these; detect them WITHOUT touching ~/.claude.
 > # Explicit TOKEN_OPTIMIZER_RUNTIME is authoritative and checked first (matches detect_runtime()).
-> # An explicit override to a Claude/Codex runtime is authoritative (matches detect_runtime); proceed.
+> # An explicit override to a Claude/Codex/CodeBuddy runtime is authoritative (matches detect_runtime); proceed.
+> # CodeBuddy plugin env vars (CODEBUDDY_PLUGIN_ROOT/CODEBUDDY_PLUGIN_DATA) are checked BEFORE
+> # Claude env vars because CodeBuddy also sets CLAUDE_PLUGIN_* for backward compatibility.
 > # Claude plugin env vars (CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA) are checked BEFORE
 > # OPENCODE_* env signals so a genuine Claude session with a stray OPENCODE_* export
 > # is NOT stopped here — it falls through to measure.py, which resolves correctly
 > # (detect_runtime step 3 beats step 4). This mirrors the Python priority order.
-> if [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "claude" ] || [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "codex" ]; then
+> if [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "claude" ] || [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "codex" ] || [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "codebuddy" ]; then
 >   :  # fall through to the measure.py resolver + authoritative gate below
 > elif [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "opencode" ]; then
 >   echo "Token Optimizer — OpenCode runtime detected."
 > elif [ "${TOKEN_OPTIMIZER_RUNTIME:-}" = "copilot" ]; then
 >   echo "Token Optimizer — GitHub Copilot runtime detected."
+> elif [ -n "${CODEBUDDY_PLUGIN_ROOT:-}${CODEBUDDY_PLUGIN_DATA:-}" ]; then
+>   :  # genuine CodeBuddy Code session; fall through to measure.py
 > elif [ -n "${CLAUDE_PLUGIN_ROOT:-}${CLAUDE_PLUGIN_DATA:-}" ]; then
 >   :  # genuine Claude Code session; fall through to measure.py (step 3 beats step 4)
 > elif [ -n "${OPENCODE_BIN:-}${OPENCODE_CONFIG_DIR:-}${OPENCODE_DATA_DIR:-}${OPENCODE_CONFIG:-}${OPENCODE_CLIENT:-}" ]; then
@@ -55,7 +59,11 @@ command below — including the runtime gate — depends on `$MEASURE_PY`, so it
 must be set first:
 ```bash
 MEASURE_PY=""
-for f in "$HOME/.claude/skills/token-optimizer/scripts/measure.py" \
+# CodeBuddy Code paths (skill install + marketplace cache)
+for f in "$HOME/.codebuddy/skills/token-optimizer/scripts/measure.py" \
+         "$HOME/.codebuddy/plugins/marketplaces"/*/skills/token-optimizer/scripts/measure.py \
+         "$HOME/.codebuddy/plugins/cache"/*/token-optimizer/*/skills/token-optimizer/scripts/measure.py \
+         "$HOME/.claude/skills/token-optimizer/scripts/measure.py" \
          "$HOME/.claude/plugins/cache"/*/token-optimizer/*/skills/token-optimizer/scripts/measure.py; do
   [ -f "$f" ] && MEASURE_PY="$f" && break
 done
@@ -73,18 +81,23 @@ python3 "$MEASURE_PY" report 2>&1 | head -1
   The Claude Code phases scan and mutate `~/.claude`, which is the wrong target
   when the user is in OpenCode (issue #57).
 - Prints any other **"… runtime detected."** notice (for example GitHub
-  Copilot) → STOP and follow that runtime's guidance, for the same reason.
+  Copilot, Hermes) → STOP and follow that runtime's guidance, for the same reason.
+- Prints **"Token Optimizer — CodeBuddy Code runtime detected."** → Continue.
+  CodeBuddy Code's config layout mirrors Claude Code's (`~/.codebuddy` instead
+  of `~/.claude`, `CODEBUDDY.md` instead of `CLAUDE.md`), so the audit engine
+  applies directly. Proceed through the phases below — `measure.py` routes
+  paths to `~/.codebuddy` automatically.
 - Otherwise continue: if `TOKEN_OPTIMIZER_RUNTIME=codex` or a Codex environment
   is detected, read `references/codex-workflow.md` and follow its chat-first
   workflow instead of the phases below. Genuine Claude Code proceeds to Phase 0.
 
 ---
 
-## Phase 0: Initialize (Claude Code)
+## Phase 0: Initialize (Claude Code / CodeBuddy Code)
 
 `MEASURE_PY` was already resolved in Step 0 — do **not** re-resolve it.
 
-Read `references/phase0-setup.md` for the full setup sequence: context window detection, pre-check, backup, coordination folder, hook checks, daemon setup, and smart compaction.
+Read `references/phase0-setup.md` for the full setup sequence: context window detection, pre-check, backup, coordination folder, hook checks, daemon setup, and smart compaction. On CodeBuddy Code, paths are under `~/.codebuddy/` instead of `~/.claude/` — the measure.py engine handles this automatically.
 
 ---
 

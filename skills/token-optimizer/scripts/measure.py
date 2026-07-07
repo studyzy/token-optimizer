@@ -93,7 +93,7 @@ except ImportError:  # pragma: no cover - Python < 3.11 fallback
 from hook_io import read_stdin_hook_input as _read_stdin_hook_input_shared
 from plugin_env import resolve_plugin_data_dir, interpret_flag_value
 from utf8_io import enforce_utf8_io, reexec_in_utf8_mode
-from runtime_env import claude_home, detect_runtime, runtime_home, runtime_name_for_humans
+from runtime_env import claude_home, codebuddy_home, detect_runtime, runtime_home, runtime_name_for_humans
 
 import codex_io
 import codex_session
@@ -113,6 +113,15 @@ _SKILL_DESC_TRUNCATION_LIMIT = 1536
 HOME = Path.home()
 RUNTIME_DIR = runtime_home()
 CLAUDE_DIR = claude_home()
+# On CodeBuddy Code, the audit target is ~/.codebuddy, not ~/.claude.
+# CodeBuddy's config layout mirrors Claude Code's, so the audit engine
+# applies directly — just the base directory changes.
+if detect_runtime() == "codebuddy":
+    CLAUDE_DIR = codebuddy_home()
+
+# Instruction file name: CLAUDE.md on Claude Code, CODEBUDDY.md on CodeBuddy Code,
+# AGENTS.md on Codex. Used by audit components that scan the instruction file.
+_INSTRUCTION_FILE = "CODEBUDDY.md" if detect_runtime() == "codebuddy" else "CLAUDE.md"
 
 # Commands that scan or MUTATE the Claude Code setup (~/.claude). When this skill
 # is invoked from inside OpenCode (which loads ~/.claude/skills by default),
@@ -1435,8 +1444,8 @@ def measure_components():
 
     # CLAUDE.md files (with symlink dedup)
     for name, path in [
-        ("claude_md_global", CLAUDE_DIR / "CLAUDE.md"),
-        ("claude_md_home", HOME / "CLAUDE.md"),
+        ("claude_md_global", CLAUDE_DIR / _INSTRUCTION_FILE),
+        ("claude_md_home", HOME / _INSTRUCTION_FILE),
     ]:
         real = resolve_real_path(path)
         if real in seen_real_paths:
@@ -1459,8 +1468,8 @@ def measure_components():
         if parent == HOME:
             continue  # Already checked ~/CLAUDE.md
         candidates = [
-            (f"claude_md_project_{parent.name}", parent / "CLAUDE.md"),
-            (f"claude_md_project_{parent.name}_dotclaude", parent / ".claude" / "CLAUDE.md"),
+            (f"claude_md_project_{parent.name}", parent / _INSTRUCTION_FILE),
+            (f"claude_md_project_{parent.name}_dotclaude", parent / ".claude" / _INSTRUCTION_FILE),
         ]
         for comp_key, claude_md in candidates:
             if claude_md.exists():
@@ -1973,8 +1982,8 @@ def _measure_codex_components():
             hooks_configured = True
             hook_path_labels.append(str(hook_path))
 
-    components["claude_md_global"] = {"path": str(CLAUDE_DIR / "CLAUDE.md"), "exists": False, "tokens": 0, "lines": 0}
-    components["claude_md_home"] = {"path": str(HOME / "CLAUDE.md"), "exists": False, "tokens": 0, "lines": 0}
+    components["claude_md_global"] = {"path": str(CLAUDE_DIR / _INSTRUCTION_FILE), "exists": False, "tokens": 0, "lines": 0}
+    components["claude_md_home"] = {"path": str(HOME / _INSTRUCTION_FILE), "exists": False, "tokens": 0, "lines": 0}
     state_memory = codex_state.memory_overhead()
     components["memory_md"] = {
         "path": str(runtime_home() / "state_*.sqlite"),
@@ -3370,7 +3379,7 @@ def print_snapshot_summary(snapshot):
 
     # Primary instruction files
     instruction_prefix = "agents_md" if is_codex else "claude_md"
-    instruction_label = "AGENTS.md" if is_codex else "CLAUDE.md"
+    instruction_label = "AGENTS.md" if is_codex else (_INSTRUCTION_FILE if detect_runtime() == "codebuddy" else "CLAUDE.md")
     instruction_total = 0
     for key in c:
         if key.startswith(instruction_prefix):
@@ -5695,7 +5704,7 @@ def generate_standalone_dashboard(days=30, quiet=False, force=False):
         instruction_status = "good"
         if coach:
             for p in coach.get("patterns_bad", []):
-                if "CLAUDE.md" in p.get("name", "") or "AGENTS.md" in p.get("name", ""):
+                if "CLAUDE.md" in p.get("name", "") or "CODEBUDDY.md" in p.get("name", "") or "AGENTS.md" in p.get("name", ""):
                     instruction_status = "warning" if p.get("severity") == "medium" else "notice"
                     break
         claude_md_health = {
@@ -6604,7 +6613,7 @@ def generate_coach_data(focus=None, components=None, trends=None):
     totals = calculate_totals(components)
     context_window = detect_context_window()[0]
     is_codex = detect_runtime() == "codex"
-    instruction_label = "AGENTS.md" if is_codex else "CLAUDE.md"
+    instruction_label = "AGENTS.md" if is_codex else (_INSTRUCTION_FILE if detect_runtime() == "codebuddy" else "CLAUDE.md")
     memory_label = "Codex memories" if is_codex else "MEMORY.md"
 
     # Collect trends if not provided
@@ -6908,7 +6917,7 @@ def generate_coach_data(focus=None, components=None, trends=None):
                 _claude_md_content = md_comp["content"]
                 break
         if not _claude_md_content:
-            for path in (CLAUDE_DIR / "CLAUDE.md", Path.home() / "CLAUDE.md", Path.cwd() / "CLAUDE.md"):
+            for path in (CLAUDE_DIR / _INSTRUCTION_FILE, Path.home() / _INSTRUCTION_FILE, Path.cwd() / _INSTRUCTION_FILE):
                 if path.exists():
                     try:
                         _claude_md_content = path.read_text(encoding="utf-8", errors="replace")[:50_000]
@@ -7342,7 +7351,7 @@ def generate_coach_block(components=None, trends=None):
     if components is None:
         components = measure_components()
     is_codex = detect_runtime() == "codex"
-    instruction_label = "AGENTS.md" if is_codex else "CLAUDE.md"
+    instruction_label = "AGENTS.md" if is_codex else (_INSTRUCTION_FILE if detect_runtime() == "codebuddy" else "CLAUDE.md")
     if trends is None:
         try:
             trends = _collect_trends_data(days=30)
@@ -10374,7 +10383,7 @@ def write_keepwarm_arm_record(session_id, transcript_path, now=None):
         # recover (R5), and the prefix proxy below is Claude-shaped. Cheap guard,
         # fail-open to "arm anyway" only if detection errors (tick re-checks).
         try:
-            if detect_runtime() != "claude":
+            if detect_runtime() not in ("claude", "codebuddy"):
                 return None
         except Exception:
             pass
@@ -18167,11 +18176,11 @@ def setup_hook(dry_run=False, uninstall=False):
     never write this hook under a non-Claude runtime — Codex must go through
     codex-install, which writes a synchronous .codex/hooks.json entry. GitHub #73-adjacent.
     """
-    if detect_runtime() != "claude":
+    if detect_runtime() not in ("claude", "codebuddy"):
         # Informational on every path (including dry-run / uninstall) so a
         # non-Claude invocation isn't a silent no-op.
         print(
-            "[Token Optimizer] setup-hook targets Claude Code (settings.json). "
+            "[Token Optimizer] setup-hook targets Claude Code / CodeBuddy Code (settings.json). "
             "For Codex use codex-install; other runtimes use their own installer."
         )
         return
@@ -20767,7 +20776,7 @@ def _ensure_dashboard_daemon(force=False):
     'restarted', 'restart-failed'. Never raises.
     """
     # Cheapest gates first -- all pure/stat, no subprocess.
-    if _is_foreign_runtime() or detect_runtime() != "claude":
+    if _is_foreign_runtime() or detect_runtime() not in ("claude", "codebuddy"):
         return "noop-foreign"
     if _read_config_flag("daemon_disabled", False):
         return "noop-disabled"
@@ -23236,7 +23245,7 @@ def memory_review(as_json=False, apply=False, stale_days=180, project_dir=None):
             if _MR_RULE_RE.search(line):
                 rule_inventory.append({
                     "text": line.strip(),
-                    "source": "CLAUDE.md",
+                    "source": _INSTRUCTION_FILE,
                     "entry": "",
                     "line": i + 1,
                 })
@@ -23397,7 +23406,7 @@ def _analyze_attention_sections(sections):
 def attention_score(filepath=None, as_json=False):
     """Score a file against the U-shaped attention curve."""
     if filepath is None:
-        filepath = str(CLAUDE_DIR / "CLAUDE.md")
+        filepath = str(CLAUDE_DIR / _INSTRUCTION_FILE)
 
     fp = Path(filepath).expanduser()
     if not fp.exists():
@@ -23489,7 +23498,7 @@ def attention_score(filepath=None, as_json=False):
 def attention_optimize(filepath=None, dry_run=True, apply=False):
     """Reorder sections to maximize attention for critical rules."""
     if filepath is None:
-        filepath = str(CLAUDE_DIR / "CLAUDE.md")
+        filepath = str(CLAUDE_DIR / _INSTRUCTION_FILE)
 
     fp = Path(filepath).expanduser()
     if not fp.exists():
@@ -32249,7 +32258,7 @@ def run_ensure_health():
     # Positive identity, never a catch-all negation: foreign runtimes
     # (opencode, copilot) returned above, but if that guard is ever bypassed
     # they must not be treated as Claude and have ~/.claude written.
-    _is_claude = detect_runtime() == "claude"
+    _is_claude = detect_runtime() in ("claude", "codebuddy")
     # Preserve session transcripts: set cleanupPeriodDays if not configured.
     # Claude Code only: writes to ~/.claude/settings.json.
     # Codex and Hermes don't have this setting; their sessions persist by default.
@@ -33537,7 +33546,7 @@ if __name__ == "__main__":
             cwd = Path.cwd()
             if detect_runtime() == "codex":
                 return [cwd / "AGENTS.md", cwd / "AGENTS.override.md", runtime_home() / "AGENTS.md"]
-            return [cwd / "CLAUDE.md", cwd / ".claude" / "CLAUDE.md", CLAUDE_DIR / "CLAUDE.md"]
+            return [cwd / _INSTRUCTION_FILE, cwd / ".claude" / _INSTRUCTION_FILE, CLAUDE_DIR / _INSTRUCTION_FILE]
 
         def _resolve_instruction_file(cli_args):
             for i, a in enumerate(cli_args):
@@ -33586,7 +33595,7 @@ if __name__ == "__main__":
         if detect_runtime() == "codex":
             candidates = [cwd / "AGENTS.md", cwd / "AGENTS.override.md", runtime_home() / "AGENTS.md"]
         else:
-            candidates = [cwd / "CLAUDE.md", cwd / ".claude" / "CLAUDE.md", CLAUDE_DIR / "CLAUDE.md"]
+            candidates = [cwd / _INSTRUCTION_FILE, cwd / ".claude" / _INSTRUCTION_FILE, CLAUDE_DIR / _INSTRUCTION_FILE]
         for candidate in candidates:
             if candidate.exists():
                 s = check_staleness(str(candidate), section)
@@ -33605,7 +33614,7 @@ if __name__ == "__main__":
             print(json.dumps(data, indent=2))
         else:
             is_codex = detect_runtime() == "codex"
-            instruction_label = "AGENTS.md" if is_codex else "CLAUDE.md"
+            instruction_label = "AGENTS.md" if is_codex else (_INSTRUCTION_FILE if detect_runtime() == "codebuddy" else "CLAUDE.md")
             score = data["health_score"]
             snap = data["snapshot"]
             print(f"\n  Token Health Score: {score}/100")

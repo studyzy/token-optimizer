@@ -1,6 +1,6 @@
 ---
 name: fleet-auditor
-description: Audit token waste across agent systems (Claude Code, Codex, OpenClaw, Hermes, OpenCode). Detect idle burns, model misrouting, and config bloat with dollar savings.
+description: Audit token waste across agent systems (Claude Code, CodeBuddy Code, Codex, OpenClaw, Hermes, OpenCode). Detect idle burns, model misrouting, and config bloat with dollar savings.
 ---
 
 # Fleet Auditor: Cross-Platform Agent Token Waste Auditor
@@ -17,7 +17,9 @@ Detects installed agent systems, collects token usage data, identifies waste pat
 ```bash
 RUNTIME="${TOKEN_OPTIMIZER_RUNTIME:-}"
 if [ -z "$RUNTIME" ]; then
-  if [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
+  if [ -n "$CODEBUDDY_PLUGIN_ROOT" ] || [ -n "$CODEBUDDY_PLUGIN_DATA" ]; then
+    RUNTIME="codebuddy"
+  elif [ -n "$CLAUDE_PLUGIN_ROOT" ] || [ -n "$CLAUDE_PLUGIN_DATA" ]; then
     RUNTIME="claude"
   elif [ -n "$CODEX_HOME" ] || [ -d "$HOME/.codex" ]; then
     RUNTIME="codex"
@@ -29,6 +31,9 @@ fi
 FLEET_PY=""
 for f in "$HOME/.codex/skills/fleet-auditor/scripts/fleet.py" \
          "$HOME/.codex/plugins/cache"/*/token-optimizer/*/skills/fleet-auditor/scripts/fleet.py \
+         "$HOME/.codebuddy/skills/fleet-auditor/scripts/fleet.py" \
+         "$HOME/.codebuddy/plugins/cache"/*/token-optimizer/*/skills/fleet-auditor/scripts/fleet.py \
+         "$HOME/.codebuddy/plugins/marketplaces"/*/skills/fleet-auditor/scripts/fleet.py \
          "$HOME/.claude/skills/fleet-auditor/scripts/fleet.py" \
          "$HOME/.claude/plugins/cache"/*/token-optimizer/*/skills/fleet-auditor/scripts/fleet.py; do
   [ -f "$f" ] && FLEET_PY="$f" && break
@@ -45,7 +50,7 @@ python3 "$FLEET_PY" detect --json
 ```
 Parse the JSON output. Report what was found.
 
-If nothing detected, explain: "No agent systems found. Fleet Auditor supports: Claude Code, Codex, OpenClaw, NanoClaw, Hermes, OpenCode, IronClaw."
+If nothing detected, explain: "No agent systems found. Fleet Auditor supports: Claude Code, CodeBuddy Code, Codex, OpenClaw, NanoClaw, Hermes, OpenCode, IronClaw."
 
 ---
 
@@ -115,7 +120,7 @@ If user wants visual analysis:
 python3 "$FLEET_PY" dashboard
 ```
 
-This generates `~/.claude/_backups/token-optimizer/fleet-dashboard.html` in Claude Code, or `~/.codex/_backups/token-optimizer/fleet-dashboard.html` when `TOKEN_OPTIMIZER_RUNTIME=codex`.
+This generates `~/.claude/_backups/token-optimizer/fleet-dashboard.html` in Claude Code, `~/.codebuddy/_backups/token-optimizer/fleet-dashboard.html` in CodeBuddy Code, or `~/.codex/_backups/token-optimizer/fleet-dashboard.html` when `TOKEN_OPTIMIZER_RUNTIME=codex`.
 
 ---
 
