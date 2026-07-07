@@ -19294,6 +19294,14 @@ def setup_all_hooks(dry_run=False, verbose=False):
     - Refuses to write if settings.json appears corrupted (non-empty file but parses to {})
     - Rejects plugin_root containing shell metacharacters
     """
+    # CodeBuddy Code plugin hooks are loaded automatically via
+    # plugin.json's "hooks" field — no need to merge into settings.json.
+    # Writing to settings.json would duplicate hooks that are already
+    # registered by the plugin system, causing duplicate executions.
+    if detect_runtime() == "codebuddy":
+        if verbose:
+            print("  [setup-all-hooks] CodeBuddy Code runtime: hooks managed by plugin.json, skipping settings.json merge")
+        return {"added": 0, "skipped": 0, "plugin_root": None, "note": "codebuddy-plugin"}
     hooks_json_path = _find_plugin_hooks_json()
     if not hooks_json_path:
         if verbose:

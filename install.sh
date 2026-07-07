@@ -21,11 +21,25 @@ set -euo pipefail
 GITHUB_REPO="alexgreensh/token-optimizer"
 REPO_HTTPS="https://github.com/${GITHUB_REPO}.git"
 REPO_SSH="git@github.com:${GITHUB_REPO}.git"
-# Honor a relocated Claude home (matches runtime_env.py:380-402 which reads
-# CLAUDE_CONFIG_DIR). OpenCode users without Claude Code, or anyone pointing
-# Claude at a non-default home, get the skill tree installed in the right
-# place instead of hard-failing on a missing ~/.claude.
-CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+# Detect runtime: CodeBuddy Code > Claude Code > OpenCode fallback.
+# When CODEBUDDY_PLUGIN_ROOT is set or ~/.codebuddy exists (and ~/.claude
+# does not), install under ~/.codebuddy instead of ~/.claude.
+# CodeBuddy Code also sets CLAUDE_PLUGIN_ROOT for backward compatibility,
+# so we check CODEBUDDY-prefixed vars first.
+if [ -n "${CODEBUDDY_PLUGIN_ROOT:-}" ] || [ -n "${CODEBUDDY_PLUGIN_DATA:-}" ] || [ -n "${CODEBUDDY_CONFIG_DIR:-}" ]; then
+    # Running under CodeBuddy Code
+    RUNTIME_HOME="${CODEBUDDY_CONFIG_DIR:-${HOME}/.codebuddy}"
+elif [ -d "${HOME}/.codebuddy" ] && [ ! -d "${HOME}/.claude" ]; then
+    # CodeBuddy is installed, Claude is not — assume CodeBuddy user
+    RUNTIME_HOME="${HOME}/.codebuddy"
+else
+    # Honor a relocated Claude home (matches runtime_env.py:380-402 which reads
+    # CLAUDE_CONFIG_DIR). OpenCode users without Claude Code, or anyone pointing
+    # Claude at a non-default home, get the skill tree installed in the right
+    # place instead of hard-failing on a missing ~/.claude.
+    RUNTIME_HOME="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}"
+fi
+CLAUDE_HOME="${RUNTIME_HOME}"
 INSTALL_DIR="${CLAUDE_HOME}/token-optimizer"
 SKILL_DIR="${CLAUDE_HOME}/skills"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/token-optimizer.XXXXXX")"
@@ -885,7 +899,7 @@ repair_and_verify_skill_payload() {
     fi
     warn "Incomplete skill payload detected (missing referenced files). Repairing sparse checkout..."
     git -C "$INSTALL_DIR" sparse-checkout set \
-        skills/ hooks/ .claude-plugin/ .codex-plugin/ .codex/ \
+        skills/ hooks/ .claude-plugin/ .codex-plugin/ .codebuddy-plugin/ .codex/ \
         2>/dev/null || git -C "$INSTALL_DIR" sparse-checkout disable 2>/dev/null || true
     if verify_skill_payload; then
         info "Skill payload restored"
@@ -1055,7 +1069,7 @@ if [ -d "${INSTALL_DIR}/.git" ]; then
         git -C "$INSTALL_DIR" sparse-checkout init --cone 2>/dev/null || true
         # Cone mode only accepts directories; root-level files are included automatically
         git -C "$INSTALL_DIR" sparse-checkout set \
-            skills/ hooks/ .claude-plugin/ .codex-plugin/ .codex/ \
+            skills/ hooks/ .claude-plugin/ .codex-plugin/ .codebuddy-plugin/ .codex/ \
             2>/dev/null || true
     fi
 
@@ -1235,8 +1249,18 @@ echo ""
 echo "  Measure current overhead:"
 echo "    python3 ${INSTALL_DIR}/skills/token-optimizer/scripts/measure.py report"
 echo ""
-echo "  Start a Claude Code session and run:"
-echo "    /token-optimizer"
+if [ -n "${CODEBUDDY_PLUGIN_ROOT:-}${CODEBUDDY_PLUGIN_DATA:-}${CODEBUDDY_CONFIG_DIR:-}" ] || \
+   { [ -d "${HOME}/.codebuddy" ] && [ ! -d "${HOME}/.claude" ]; }; then
+    echo "  Start a CodeBuddy Code session and run:"
+    echo "    /token-optimizer"
+    echo ""
+    echo "  Or install via CodeBuddy marketplace:"
+    echo "    /plugin marketplace add alexgreensh/token-optimizer"
+    echo "    /plugin install token-optimizer@alexgreensh-token-optimizer"
+else
+    echo "  Start a Claude Code session and run:"
+    echo "    /token-optimizer"
+fi
 echo ""
 echo "  Full docs: https://github.com/alexgreensh/token-optimizer"
 echo ""
